@@ -16,8 +16,10 @@ class VENINE_API ULiquidSystem : public UBlueprintFunctionLibrary
 	
 	public:
 
+	static TMap<FString, float> MeshVolume;
+
 	UFUNCTION(BlueprintCallable, Category = "LiquidSystem")
-	static FVector GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMeshComponent, float Alpha, FVector PlaneNormal);
+	static FVector GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMeshComponent, float Alpha, FVector PlaneNormal, bool Debug);
 	
 	UFUNCTION(BlueprintCallable, Category = "LiquidSystem")
 	static float GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent, FVector PlanePosition, FVector PlaneNormal);
