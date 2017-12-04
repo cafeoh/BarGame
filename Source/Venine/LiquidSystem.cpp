@@ -14,6 +14,8 @@ AActor *Owner = NULL;
 const TArray<FColor>ColorMap = { FColor::Red, FColor::Yellow, FColor::Green, FColor::Cyan, FColor::Blue, FColor::Magenta };
 
 TMap< FString, float > ULiquidSystem::MeshVolume;
+double ULiquidSystem::LastDebugUpdate = 0.;
+
 
 // Get all edges (bottom -> top) sorted by their bottom edge, from bottom to top
 static TArray<TTuple<FVector, FVector, FVector>> GetZSortedTriangles(TArray<FVector> &TransformedVertices, FIndexArrayView &IndexBuffer){
@@ -462,6 +464,8 @@ float ComputeSectionVolume(FVector BottomPoint, FVector TopPoint, TArray<TTuple<
 
 FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMeshComponent, float Alpha, FVector PlaneNormal, bool Debug){
 
+	SavedRotationData = TTuple<FVector, float>{ FVector::ZeroVector, 0 };
+
 	FVector Result = FVector::ZeroVector;	
 
 	if (StaticMeshComponent){
@@ -476,6 +480,8 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 
 	GetBuffers(StaticMeshComponent, Vertices, Triangles, ZBounds, PlaneNormal);
 
+	Result = Vertices[Vertices.Num()-1];
+
 	TArray<TPair<float,float>> SlicedVolume;
 	SlicedVolume.Reserve(Vertices.Num());
 
@@ -485,8 +491,6 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 	float TotalVolume = 0;
 	float PreviousArea = 0;
 	float ReturnHeight = ZBounds.Key;
-
-	LOGW("%d triangles",Triangles.Num());
 
 	if(MeshVolume.Contains(MeshName)){
 		TotalVolume = MeshVolume[MeshName];
@@ -504,12 +508,23 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 	const float AcceptableError = 0.01f;
 	const uint32 Iterations = 10;
 
+	bool FoundSlice = false;
+
 	SectionIndex = 0;
 	for(int32 i=1 ; i < Vertices.Num() ; i++){
+
+		// Volume is already enough
 		if (Volume >= TargetVolume - AcceptableError){
-			LOG("Volume : %f/%f after iteration %d/%d", Volume, TargetVolume, i, Vertices.Num());
+			//LOG("Volume : %f/%f after iteration %d/%d", Volume, TargetVolume, i, Vertices.Num());
 			Result = Vertices[i-1];
+
+			FoundSlice = true;
 			break;
+		}
+
+		// Skip if slice it too thin to matter
+		if (Vertices[i].Z - Vertices[i-1].Z < 0.001){
+			continue;
 		}
 
 		float SectionVolume = ComputeSectionVolume(Vertices[i-1], Vertices[i],Triangles, false);
@@ -538,13 +553,19 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 				SectionVolume = ComputeSectionVolume(Vertices[i - 1], (TempBot + TempTop) / 2, Triangles, true);  // DEBUG LINE REMOVE THIS
 			Volume += SectionVolume;
 			Result = (TempBot + TempTop)/2;
+
+			FoundSlice = true;
 			break;
 		}
 	}
 
+	if(!FoundSlice){
+		LOGE("========\nOVERFLOW\n========\n");
+	}
+
 	Result = UnrotateVectorWithNormal(Result, PlaneNormal);
 
-	LOG("Volume : %f/%f\nResult : %s", Volume, TargetVolume, *(Result.ToString()));
+	//LOG("Volume : %f/%f\nResult : %s", Volume, TotalVolume, *(Result.ToString()));
 
 	//PlaneNormal = FVector::UpVector;
 
@@ -566,6 +587,7 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 }
 
 float ULiquidSystem::GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent, FVector PlanePosition, FVector PlaneNormal) {
+
 	float Area = 0;
 
 	if (StaticMeshComponent) {
@@ -598,6 +620,11 @@ float ULiquidSystem::GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent
 
 	FVector OrthoPlanePosition = BasePoint;
 	FVector OrthoPlaneNormal = FVector::CrossProduct(StaticMeshComponent->GetUpVector(), FVector::UpVector);
+
+	//float OrthoLength = OrthoPlaneNormal.Size();
+	OrthoPlaneNormal.Normalize();
+
+	FVector::Projection
 
 	for (int32 i = 0; i < Vertices.Num(); i++) {
 		if (Vertices[i].Z > PlanePosition.Z) {
@@ -634,8 +661,15 @@ float ULiquidSystem::GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent
 
 		//LOGE("%f Area at height %f (%f)",Area, Vertex.Z);
 	}
+	
+	if(FPlatformTime::Seconds() - LastDebugUpdate > .5){
+		LOGE("[%s]", *(StaticMeshComponent->GetOwner()->GetName()));
+		LOGW("A  : %f\tV : %d", Area, Vertices.Num());
+		LOGW("ZB : %f\t%f", ZBounds.Key, ZBounds.Value);
+		LOGW("R  : %s (%f)\t", *(SavedRotationData.Get<0>().ToString()), SavedRotationData.Get<1>());
 
-	LOGE("Area : %f",Area);
+		LastDebugUpdate = FPlatformTime::Seconds();
+	}
 
 	/*float TargetVolume = Volume*Alpha;
 	float ReturnHeight = ZBounds.Value;
