@@ -565,6 +565,11 @@ FVector ULiquidSystem::GetVolumetricSlicingPlane(UStaticMeshComponent *StaticMes
 
 	Result = UnrotateVectorWithNormal(Result, PlaneNormal);
 
+	if (FPlatformTime::Seconds() - LastDebugUpdate > .5) {
+		LOGE("[%s]", *(StaticMeshComponent->GetOwner()->GetName()));
+		LOGW("V : %d/%d",TargetVolume,TotalVolume);
+	}
+
 	//LOG("Volume : %f/%f\nResult : %s", Volume, TotalVolume, *(Result.ToString()));
 
 	//PlaneNormal = FVector::UpVector;
@@ -624,8 +629,6 @@ float ULiquidSystem::GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent
 	//float OrthoLength = OrthoPlaneNormal.Size();
 	OrthoPlaneNormal.Normalize();
 
-	FVector::Projection
-
 	for (int32 i = 0; i < Vertices.Num(); i++) {
 		if (Vertices[i].Z > PlanePosition.Z) {
 			Vertices[i] = PlanePosition;
@@ -663,7 +666,6 @@ float ULiquidSystem::GetSlicedExitArea(UStaticMeshComponent *StaticMeshComponent
 	}
 	
 	if(FPlatformTime::Seconds() - LastDebugUpdate > .5){
-		LOGE("[%s]", *(StaticMeshComponent->GetOwner()->GetName()));
 		LOGW("A  : %f\tV : %d", Area, Vertices.Num());
 		LOGW("ZB : %f\t%f", ZBounds.Key, ZBounds.Value);
 		LOGW("R  : %s (%f)\t", *(SavedRotationData.Get<0>().ToString()), SavedRotationData.Get<1>());
